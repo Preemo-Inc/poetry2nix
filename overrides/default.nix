@@ -76,7 +76,7 @@ lib.composeManyExtensions [
         (drv: attr: addBuildSystem {
           inherit drv self attr;
         })
-        super.${attr}
+        (super.${attr} or null)
         systems)
       buildSystems)
 
@@ -432,6 +432,11 @@ lib.composeManyExtensions [
         '';
       });
 
+      cysystemd = super.cysystemd.overridePythonAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.systemd ];
+        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.pkg-config ];
+      });
+
       daphne = super.daphne.overridePythonAttrs (old: {
         postPatch = ''
           substituteInPlace setup.py --replace 'setup_requires=["pytest-runner"],' ""
@@ -581,6 +586,8 @@ lib.composeManyExtensions [
 
       duckdb = super.duckdb.overridePythonAttrs (old: {
         postPatch = lib.optionalString (!(old.src.isWheel or false)) ''
+          cd tools/pythonpkg
+
           substituteInPlace setup.py \
             --replace 'multiprocessing.cpu_count()' "$NIX_BUILD_CORES" \
             --replace 'setuptools_scm<7.0.0' 'setuptools_scm'
@@ -1086,6 +1093,18 @@ lib.composeManyExtensions [
         }
       );
 
+      llama-cpp-python = super.llama-cpp-python.overridePythonAttrs (
+        old: {
+          buildInputs = with pkgs; lib.optionals stdenv.isDarwin [
+            darwin.apple_sdk.frameworks.Accelerate
+          ];
+          nativeBuildInputs = [ pkgs.cmake ] ++ (old.nativeBuildInputs or [ ]);
+          preBuild = ''
+            cd "$OLDPWD"
+          '';
+        }
+      );
+
       llvmlite = super.llvmlite.overridePythonAttrs (
         old:
         let
@@ -1326,22 +1345,30 @@ lib.composeManyExtensions [
       );
 
       mypy = super.mypy.overridePythonAttrs (
-        old: {
-          buildInputs = (old.buildInputs or [ ]) ++ [
-            self.types-typed-ast
-            self.types-setuptools
-          ]
-            ++ lib.optional (lib.strings.versionAtLeast old.version "0.990") self.types-psutil
-          ;
+        old:
+        let
           # Compile mypy with mypyc, which makes mypy about 4 times faster. The compiled
           # version is also the default in the wheels on Pypi that include binaries.
           # is64bit: unfortunately the build would exhaust all possible memory on i686-linux.
           MYPY_USE_MYPYC = stdenv.buildPlatform.is64bit;
 
+          envAttrs =
+            if old ? env
+            then { env = old.env // { inherit MYPY_USE_MYPYC; }; }
+            else { inherit MYPY_USE_MYPYC; };
+        in
+        {
+          buildInputs = (old.buildInputs or [ ]) ++ [
+            self.types-typed-ast
+            self.types-setuptools
+          ]
+          ++ lib.optional (lib.strings.versionAtLeast old.version "0.990") self.types-psutil
+          ;
+
           # when testing reduce optimisation level to drastically reduce build time
           # (default is 3)
           # MYPYC_OPT_LEVEL = 1;
-        } // lib.optionalAttrs (old.format != "wheel") {
+        } // envAttrs // lib.optionalAttrs (old.format != "wheel") {
           # FIXME: Remove patch after upstream has decided the proper solution.
           #        https://github.com/python/mypy/pull/11143
           patches = (old.patches or [ ]) ++ lib.optionals ((lib.strings.versionAtLeast old.version "0.900") && lib.strings.versionOlder old.version "0.940") [
@@ -1513,6 +1540,7 @@ lib.composeManyExtensions [
           buildInputs = [
             self.scikit-build
           ] ++ lib.optionals stdenv.isDarwin (with pkgs.darwin.apple_sdk.frameworks; [
+            Accelerate
             AVFoundation
             Cocoa
             CoreMedia
@@ -1567,7 +1595,7 @@ lib.composeManyExtensions [
             lib.warn "Unknown orjson version: '${version}'. Please update getCargoHash." lib.fakeHash
           );
         in
-        super.orjson.overridePythonAttrs (old: {
+        super.orjson.overridePythonAttrs (old: if old.src.isWheel or false then { } else {
           cargoDeps = pkgs.rustPlatform.fetchCargoTarball {
             inherit (old) src;
             name = "${old.pname}-${old.version}";
@@ -1799,6 +1827,10 @@ lib.composeManyExtensions [
                   pkgs.cmake
                 ];
 
+                buildInputs = (old.buildInputs or [ ]) ++ [
+                  _arrow-cpp
+                ];
+
                 preBuild = ''
                   export PYARROW_PARALLEL=$NIX_BUILD_CORES
                 '';
@@ -1946,6 +1978,10 @@ lib.composeManyExtensions [
         }
       );
 
+      pynetbox = super.pynetbox.overridePythonAttrs (old: {
+        propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [ self.setuptools ];
+      });
+
       pynput = super.pynput.overridePythonAttrs (old: {
         nativeBuildInputs = (old.nativeBuildInputs or [ ])
           ++ [ self.sphinx ];
@@ -2051,6 +2087,7 @@ lib.composeManyExtensions [
             --replace "find_library('snap7')" "\"${pkgs.snap7}/lib/libsnap7.so\""
         '';
       });
+
 
       pytoml = super.pytoml.overridePythonAttrs (
         old: {
@@ -2190,6 +2227,16 @@ lib.composeManyExtensions [
       python-olm = super.python-olm.overridePythonAttrs (
         old: {
           buildInputs = old.buildInputs or [ ] ++ [ pkgs.olm ];
+        }
+      );
+
+      python-pam = super.python-pam.overridePythonAttrs (
+        old: {
+          postPatch = ''
+            substituteInPlace src/pam/__internals.py \
+            --replace 'find_library("pam")' '"${pkgs.pam}/lib/libpam.so"' \
+            --replace 'find_library("pam_misc")' '"${pkgs.pam}/lib/libpam_misc.so"'
+          '';
         }
       );
 
@@ -2975,6 +3022,11 @@ lib.composeManyExtensions [
               '';
             }
         );
+
+      flake8-mutable = super.flake8-mutable.overridePythonAttrs
+        (old: { buildInputs = old.buildInputs or [ ] ++ [ self.pytest-runner ]; });
+      pydantic = super.pydantic.overridePythonAttrs
+        (old: { buildInputs = old.buildInputs or [ ] ++ [ pkgs.libxcrypt ]; });
 
       y-py = super.y-py.override {
         preferWheel = true;
