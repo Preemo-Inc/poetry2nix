@@ -15835,6 +15835,9 @@
   "ropper": [
     "setuptools"
   ],
+  "rouge-score": [
+    "setuptools"
+  ],
   "roundrobin": [
     "setuptools"
   ],
