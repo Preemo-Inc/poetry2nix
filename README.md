@@ -20,15 +20,15 @@ For more information, see [the announcement post on the Tweag blog](https://www.
 
 The _poetry2nix_ public API consists of the following attributes:
 
-- [mkPoetryApplication](#mkPoetryApplication): Creates a Python application.
-- [mkPoetryEnv](#mkPoetryEnv): Creates a Python environment with an interpreter and all packages from `poetry.lock`.
-- [mkPoetryPackages](#mkPoetryPackages): Creates an attribute set providing access to the generated packages and other artifacts.
-- [mkPoetryScriptsPackage](#mkPoetryScriptsPackage): Creates a package containing the scripts from `tool.poetry.scripts` of the `pyproject.toml`.
-- [mkPoetryEditablePackage](#mkPoetryEditablePackage): Creates a package containing editable sources. Changes in the specified paths will be reflected in an interactive nix-shell session without the need to restart it.
-- [defaultPoetryOverrides](#defaultPoetryOverrides): A set of bundled overrides fixing problems with Python packages.
-- [overrides.withDefaults](#overrideswithDefaults): A convenience function for specifying overrides on top of the defaults.
-- [overrides.withoutDefaults](#overrideswithoutDefaults): A convenience function for specifying overrides without defaults.
-- [cleanPythonSources](#cleanPythonSources): A function to create a source filter for python projects.
+- [mkPoetryApplication](#mkpoetryapplication): Creates a Python application.
+- [mkPoetryEnv](#mkpoetryenv): Creates a Python environment with an interpreter and all packages from `poetry.lock`.
+- [mkPoetryPackages](#mkpoetrypackages): Creates an attribute set providing access to the generated packages and other artifacts.
+- [mkPoetryScriptsPackage](#mkpoetryscriptspackage): Creates a package containing the scripts from `tool.poetry.scripts` of the `pyproject.toml`.
+- [mkPoetryEditablePackage](#mkpoetryeditablepackage): Creates a package containing editable sources. Changes in the specified paths will be reflected in an interactive nix-shell session without the need to restart it.
+- [defaultPoetryOverrides](#defaultpoetryoverrides): A set of bundled overrides fixing problems with Python packages.
+- [overrides.withDefaults](#overrideswithdefaults): A convenience function for specifying overrides on top of the defaults.
+- [overrides.withoutDefaults](#overrideswithoutdefaults): A convenience function for specifying overrides without defaults.
+- [cleanPythonSources](#cleanpythonsources): A function to create a source filter for python projects.
 
 ### mkPoetryApplication
 
@@ -38,7 +38,7 @@ Creates a Python application using the Python interpreter specified based on the
 - **src**: project source (_default_: `cleanPythonSources { src = projectDir; }`).
 - **pyproject**: path to `pyproject.toml` (_default_: `projectDir + "/pyproject.toml"`).
 - **poetrylock**: `poetry.lock` file path (_default_: `projectDir + "/poetry.lock"`).
-- **overrides**: Python overrides to apply (_default_: `[defaultPoetryOverrides]`).
+- **overrides**: Python overrides to apply (_default_: `defaultPoetryOverrides`).
 - **meta**: application [meta](https://nixos.org/nixpkgs/manual/#chap-meta) data (_default:_ `{}`).
 - **python**: The Python interpreter to use (_default:_ `pkgs.python3`).
 - **preferWheels** : Use wheels rather than sdist as much as possible (_default_: `false`).
@@ -94,7 +94,7 @@ Creates an environment that provides a Python interpreter along with all depende
 - **projectDir**: path to the root of the project.
 - **pyproject**: path to `pyproject.toml` (_default_: `projectDir + "/pyproject.toml"`).
 - **poetrylock**: `poetry.lock` file path (_default_: `projectDir + "/poetry.lock"`).
-- **overrides**: Python overrides to apply (_default_: `[defaultPoetryOverrides]`).
+- **overrides**: Python overrides to apply (_default_: `defaultPoetryOverrides`).
 - **python**: The Python interpreter to use (_default:_ `pkgs.python3`).
 - **editablePackageSources**: A mapping from package name to source directory, these will be installed in editable mode. Note that path dependencies with `develop = true` will be installed in editable mode unless explicitly passed to `editablePackageSources` as `null`.  (_default:_ `{}`).
 - **extraPackages**: A function taking a Python package set and returning a list of extra packages to include in the environment. This is intended for packages deliberately not added to `pyproject.toml` that you still want to include. An example of such a package may be `pip`. (_default:_ `(ps: [ ])`).
@@ -160,7 +160,7 @@ Creates an attribute set of the shape `{ python, poetryPackages, pyProject, poet
 - **projectDir**: path to the root of the project.
 - **pyproject**: path to `pyproject.toml` (_default_: `projectDir + "/pyproject.toml"`).
 - **poetrylock**: `poetry.lock` file path (_default_: `projectDir + "/poetry.lock"`).
-- **overrides**: Python overrides to apply (_default_: `[defaultPoetryOverrides]`).
+- **overrides**: Python overrides to apply (_default_: `defaultPoetryOverrides`).
 - **python**: The Python interpreter to use (_default:_ `pkgs.python3`).
 - **editablePackageSources**: A mapping from package name to source directory, these will be installed in editable mode (_default:_ `{}`).
 - **preferWheels** : Use wheels rather than sdist as much as possible (_default_: `false`).
@@ -314,6 +314,11 @@ in pkgs.poetry2nix.mkPoetryApplication {
 **Q.** Does poetry2nix install wheels our sdists?
 
 **A.** By default, poetry2nix installs from source. If you want to give precedence to wheels, look at the `preferWheel` and `preferWheels` attributes.
+
+**Q.** Does poetry2nix use package definitions from nixpkgs' Python package set?
+
+**A.** poetry2nix overlays packages taken from the `poetry.lock` file on top of nixpkgs, in such a way that overlaid packages in nixpkgs are completely ignored.
+Any package that is used, but isn't in the `poetry.lock` file (most commonly [build dependencies](https://github.com/nix-community/poetry2nix/blob/master/overrides/build-systems.json)) is taken from nixpkgs.
 
 **Q.** How to prefer wheel installation for a single package?
 
